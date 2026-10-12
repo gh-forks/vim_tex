@@ -24,8 +24,13 @@ function! s:compiler.__check_requirements() abort dict " {{{1
 endfunction
 
 " }}}1
-function! s:compiler.__build_cmd() abort dict " {{{1
-  return self.command
+function! s:compiler.__build_cmd(passed_options) abort dict " {{{1
+  return self.command->substitute(
+        \ '@tex',
+        \ vimtex#util#shellescape(b:vimtex.tex),
+        \ 'g'
+        \)
+        \ .. a:passed_options
 endfunction
 
 " }}}1

@@ -1,0 +1,11 @@
+[tools]
+hugo = "0.166.0"
+uv = "0.12.19"
+"github:orhun/git-cliff" = "2.14.2"
+
+[tasks.web-build]
+run = "web/scripts/build.sh"
+
+[tasks.web-host]
+depends = ["web-build"]
+run = "python -m http.server -d web/public 8000"

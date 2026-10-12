@@ -93,7 +93,7 @@ endfunction
 
 " }}}1
 function! s:viewer._start(outfile) dict abort " {{{1
-  let l:cmd = 'mupdf'
+  let l:cmd = 'exec mupdf'
   if !empty(g:vimtex_view_mupdf_options)
     let l:cmd .= ' ' . g:vimtex_view_mupdf_options
   endif
@@ -118,6 +118,7 @@ endfunction
 function! s:viewer._forward_search(outfile) dict abort " {{{1
   if !executable('xdotool') | return | endif
   if !executable('synctex') | return | endif
+  if self.xwin_id <= 0 | return | endif
 
   let self.cmd_synctex_view = 'synctex view -i '
         \ . (line('.') + 1) . ':'

@@ -147,7 +147,7 @@ function! s:init_buffer_bib() abort " {{{1
   " Specify list of modules to disable
   return [
         \ 'fold', 'matchparen', 'format', 'doc', 'imaps', 'delim',
-        \ 'env', 'motion', 'complete',
+        \ 'env', 'motion', 'complete', 'preview',
         \]
 endfunction
 
@@ -164,11 +164,16 @@ function! s:init_default_mappings() abort " {{{1
   call s:map_prefixed(0, 'n', 'q', '<plug>(vimtex-log)')
   call s:map_prefixed(1, 'n', 'a', '<plug>(vimtex-context-menu)')
 
+  if g:vimtex_preview_enabled
+    call s:map_prefixed(1, 'n', 'p', '<plug>(vimtex-preview-toggle)')
+  endif
+
   call s:map(0, 'n', 'ds$', '<plug>(vimtex-env-delete-math)')
   call s:map(0, 'n', 'cs$', '<plug>(vimtex-env-change-math)')
   call s:map(0, 'n', 'dse', '<plug>(vimtex-env-delete)')
   call s:map(0, 'n', 'cse', '<plug>(vimtex-env-change)')
-  call s:map(0, 'n', 'tse', '<plug>(vimtex-env-toggle-star)')
+  call s:map(0, 'n', 'tse', '<plug>(vimtex-env-toggle)')
+  call s:map(0, 'n', 'tss', '<plug>(vimtex-env-toggle-star)')
   call s:map(0, 'n', 'ts$', '<plug>(vimtex-env-toggle-math)')
   call s:map(0, 'n', '<F6>', '<plug>(vimtex-env-surround-line)')
   call s:map(0, 'x', '<F6>', '<plug>(vimtex-env-surround-visual)')
@@ -178,6 +183,7 @@ function! s:init_default_mappings() abort " {{{1
   call s:map(0, 'n', 'tsc',  '<plug>(vimtex-cmd-toggle-star)')
   call s:map(0, 'n', 'tsf',  '<plug>(vimtex-cmd-toggle-frac)')
   call s:map(0, 'x', 'tsf',  '<plug>(vimtex-cmd-toggle-frac)')
+  call s:map(0, 'n', 'tsb',  '<plug>(vimtex-cmd-toggle-break)')
   call s:map(0, 'i', '<F7>', '<plug>(vimtex-cmd-create)')
   call s:map(0, 'n', '<F7>', '<plug>(vimtex-cmd-create)')
   call s:map(0, 'x', '<F7>', '<plug>(vimtex-cmd-create)')
@@ -193,6 +199,7 @@ function! s:init_default_mappings() abort " {{{1
 
   if g:vimtex_compiler_enabled
     call s:map_prefixed(0, 'n', 'l', '<plug>(vimtex-compile)')
+    call s:map_prefixed(0, 'n', 'S', '<plug>(vimtex-compile-ss)')
     call s:map_prefixed(0, 'n', 'o', '<plug>(vimtex-compile-output)')
     call s:map_prefixed(1, 'n', 'L', '<plug>(vimtex-compile-selected)')
     call s:map_prefixed(1, 'x', 'L', '<plug>(vimtex-compile-selected)')
@@ -241,10 +248,13 @@ function! s:init_default_mappings() abort " {{{1
     call s:map(1, 'n', ']n', '<plug>(vimtex-]n)')
     call s:map(1, 'n', '[N', '<plug>(vimtex-[N)')
     call s:map(1, 'n', '[n', '<plug>(vimtex-[n)')
-    call s:map(1, 'x', ']N', '<plug>(vimtex-]N)')
-    call s:map(1, 'x', ']n', '<plug>(vimtex-]n)')
-    call s:map(1, 'x', '[N', '<plug>(vimtex-[N)')
-    call s:map(1, 'x', '[n', '<plug>(vimtex-[n)')
+    " These are forced in order to overwrite Neovim's default mappings for
+    " tree-sitter based incremental selection. Disable the mappings with e.g.
+    " vim.g.vimtex_mappings_disable = { x = { "]n", "[n", "]N", "[N" } }
+    call s:map(1, 'x', ']N', '<plug>(vimtex-]N)', 1)
+    call s:map(1, 'x', ']n', '<plug>(vimtex-]n)', 1)
+    call s:map(1, 'x', '[N', '<plug>(vimtex-[N)', 1)
+    call s:map(1, 'x', '[n', '<plug>(vimtex-[n)', 1)
     call s:map(1, 'o', ']N', '<plug>(vimtex-]N)')
     call s:map(1, 'o', ']n', '<plug>(vimtex-]n)')
     call s:map(1, 'o', '[N', '<plug>(vimtex-[N)')
@@ -364,9 +374,11 @@ function! s:filename_changed_post() abort " {{{1
 
     if has_key(b:vimtex, 'compiler')
       if b:vimtex.compiler.is_running()
-        call vimtex#log#warning('Compilation stopped!')
         call vimtex#compiler#stop()
+        call vimtex#log#warning('Compilation stopped!')
       endif
+
+      call vimtex#compiler#init_state(b:vimtex)
     endif
   endif
 endfunction

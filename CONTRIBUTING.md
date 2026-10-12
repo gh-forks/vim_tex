@@ -34,7 +34,7 @@ some pointers:
 
 VimTeX also has a high level code [documentation](./DOCUMENTATION.md) mainly
 for developers. It should provide an overview of the VimTeX code and APIs and
-may help developers (and users) to to understand the functionalities of the
+may help developers (and users) to understand the functionalities of the
 plugin a little bit faster.
 
 ## Code style
@@ -63,9 +63,20 @@ When submitting code for VimTeX, please adhere to the following standards:
 
 ## Running tests
 
-New functionality should be accompanied by tests. Tests can be run from the
-`test` folder with `make`. The tests currently only run on Linux, and the
-following utilities are required to run all the tests:
+New functionality should be accompanied by tests. Tests are run with `make`,
+either from the repository root or from the `test` folder:
+
+```sh
+make                             # run the full test suite
+make test-toc                    # run a single test directory
+make test/test-toc/test-general  # run a single test file
+```
+
+The root `Makefile` is only a wrapper for `test/Makefile`, so the same targets
+work from the `test` folder (e.g. `cd test && make test-toc`).
+
+The tests currently only run on Linux, and the following utilities are required
+to run all the tests:
 
 - `wget`
 - `chronic` (from [moreutils](https://joeyh.name/code/moreutils/))

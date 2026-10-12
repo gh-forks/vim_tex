@@ -105,6 +105,8 @@ endfunction
 
 " }}}1
 function! s:toc.close() abort dict " {{{1
+  if !has_key(self, 'bufnr_prev') | return | endif
+
   let self.fold_level = &l:foldlevel
 
   if self.resize
@@ -114,6 +116,7 @@ function! s:toc.close() abort dict " {{{1
   if self.split_pos ==# 'full'
     silent execute 'buffer' self.bufnr_prev
   else
+    call win_gotoid(self.winid_prev)
     silent execute 'bwipeout' bufnr(self.name)
   endif
 
@@ -371,10 +374,10 @@ function! s:toc.set_syntax() abort dict "{{{1
         \ '"\v\zs%('
         \   . toupper(join(keys(g:vimtex_toc_todo_labels), '|')) . '):\ze "'
         \ 'contained'
-  syntax match VimtexTocTodo "\v\zs%(an)?fxnote:\ze " contained
-  syntax match VimtexTocWarning "\v\zs%(an)?fxwarning:\ze " contained
-  syntax match VimtexTocError "\v\zs%(an)?fxerror:\ze " contained
-  syntax match VimtexTocFatal "\v\zs%(an)?fxfatal:\ze " contained
+  syntax match VimtexTocTodo "\v\zs\a+note:\ze " contained
+  syntax match VimtexTocWarning "\v\zs\a+warning:\ze " contained
+  syntax match VimtexTocError "\v\zs\a+error:\ze " contained
+  syntax match VimtexTocFatal "\v\zs\a+fatal:\ze " contained
 
   syntax match VimtexTocInclPath /.*/ contained
   syntax match VimtexTocIncl /\w\+ incl:/ contained

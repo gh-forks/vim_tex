@@ -44,17 +44,15 @@ function! VimtexIndent(lnum) abort " {{{1
 
   let [l:prev_lnum, l:prev_line] = s:get_prev_lnum(prevnonblank(a:lnum - 1))
   if l:prev_lnum == 0 | return indent(a:lnum) | endif
-  let l:line = s:clean_line(getline(a:lnum))
+  let l:line = getline(a:lnum)
 
   " Check for verbatim modes
   if s:in_verbatim(a:lnum)
     return empty(l:line) ? indent(l:prev_lnum) : indent(a:lnum)
   endif
 
-  " Use previous indentation for comments
-  if l:line =~# '^\s*%'
-    return indent(a:lnum)
-  endif
+  " Remove comments before subsequent checks
+  let l:line = s:clean_line(l:line)
 
   " Align on ampersands
   let l:ind = s:indent_amps.check(a:lnum, l:line, l:prev_lnum, l:prev_line)
@@ -151,7 +149,11 @@ function! s:indent_amps.parse_context(lnum, line) abort dict " {{{1
   let l:lnum = prevnonblank(a:lnum - 1)
 
   while l:lnum >= 1
-    let l:line = getline(l:lnum)
+    let l:line = s:clean_line(getline(l:lnum))
+    if empty(l:line)
+      let l:lnum = prevnonblank(l:lnum - 1)
+      continue
+    endif
 
     if l:line =~# s:re_depth_end
       let l:depth += 1
@@ -210,6 +212,8 @@ let s:envs_ignored = '\v<%(' . join(g:vimtex_indent_ignored_envs, '|') . ')>'
 
 " }}}1
 function! s:indent_items(line, lnum, prev_line, prev_lnum) abort " {{{1
+  if s:envs_lists_empty | return 0 | endif
+
   if a:prev_line =~# s:envs_item
         \ && (a:line !~# s:envs_enditem
         \     || (a:line =~# s:envs_item && a:prev_line =~# s:envs_beglist))
@@ -231,6 +235,7 @@ function! s:indent_items(line, lnum, prev_line, prev_lnum) abort " {{{1
   return 0
 endfunction
 
+let s:envs_lists_empty = empty(g:vimtex_indent_lists)
 let s:envs_lists = join(g:vimtex_indent_lists, '\|')
 let s:envs_item = '^\s*\\item\>'
 let s:envs_beglist = '\\begin{\%(' . s:envs_lists . '\)'
@@ -260,8 +265,8 @@ let s:re_opt = extend({
 let s:re_open = join(s:re_opt.open, '\|')
 let s:re_close = join(s:re_opt.close, '\|')
 if s:re_opt.include_modified_math
-  let s:re_open .= (empty(s:re_open) ? '' : '\|') . g:vimtex#delim#re.delim_mod_math.open
-  let s:re_close .= (empty(s:re_close) ? '' : '\|') . g:vimtex#delim#re.delim_mod_math.close
+  let s:re_open .= (empty(s:re_open) ? '' : '\|') . g:vimtex#delim#re.delim_math_mod.open
+  let s:re_close .= (empty(s:re_close) ? '' : '\|') . g:vimtex#delim#re.delim_math_mod.close
 endif
 let s:re_delim_trivial = empty(s:re_open) || empty(s:re_close)
 

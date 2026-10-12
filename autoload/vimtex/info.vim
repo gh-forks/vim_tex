@@ -39,6 +39,7 @@ function! s:info.gather_system_info() abort dict " {{{1
   let l:lines = [
         \ 'System info:',
         \ '  OS: ' . s:get_os_info(),
+        \ '  LaTeX version: ' . s:get_latex_info(),
         \ '  Vim version: ' . s:get_vim_info(),
         \]
 
@@ -49,6 +50,11 @@ function! s:info.gather_system_info() abort dict " {{{1
   else
     call add(l:lines, '  Has clientserver: false')
   endif
+
+  call add(l:lines, '  $PATH:')
+  for l:path in uniq(sort(split($PATH, '[:;]')))
+    call add(l:lines, '    - ' .. l:path)
+  endfor
 
   return l:lines
 endfunction
@@ -198,13 +204,22 @@ function! s:get_os_info() abort " {{{1
     let l:win_info = vimtex#jobs#cached('systeminfo')
 
     try
-      let l:name = vimtex#util#trim(matchstr(l:win_info[1], ':\s*\zs.*'))
-      let l:version = vimtex#util#trim(matchstr(l:win_info[2], ':\s*\zs.*'))
+      let l:name = trim(matchstr(l:win_info[1], ':\s*\zs.*'))
+      let l:version = trim(matchstr(l:win_info[2], ':\s*\zs.*'))
       return l:name . ' (' . l:version . ')'
     catch
       return 'Windows (' . string(l:win_info) . ')'
     endtry
   endif
+endfunction
+
+" }}}1
+function! s:get_latex_info() abort " {{{1
+  let l:result = executable('latex')
+      \ ? vimtex#jobs#capture('latex --version')[0]
+      \ : 'LATEX WAS NOT FOUND!'
+
+  return l:result
 endfunction
 
 " }}}1

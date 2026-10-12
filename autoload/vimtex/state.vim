@@ -17,6 +17,15 @@ function! vimtex#state#init() abort " {{{1
   let [l:main, l:main_parser, l:unsupported_modules] = s:get_main()
   let l:id = s:get_main_id(l:main)
 
+  if exists('s:cand_fallback')
+    call vimtex#log#warning(
+          \ 'Ignored latexmain specifier which points to: ',
+          \ s:cand_fallback,
+          \ 'Reason: That main file did not include this file!',
+          \)
+    unlet s:cand_fallback
+  endif
+
   if l:id >= 0
     let b:vimtex_id = l:id
     let b:vimtex = s:vimtex_states[l:id]
@@ -34,6 +43,11 @@ endfunction
 
 " }}}1
 function! vimtex#state#init_local() abort " {{{1
+  " Note: s:subfile_preserve_root is set by s:get_main_from_subfile() when the
+  "       path given in \documentclass[...]{subfiles} could only be resolved
+  "       relative to the project root. Such a subfile must be compiled from
+  "       that root rather than from its own directory, else the path will not
+  "       resolve for the compiler either. See also #630.
   let l:preserve_root = get(s:, 'subfile_preserve_root')
   unlet! s:subfile_preserve_root
 
@@ -258,6 +272,12 @@ function! s:get_main() abort " {{{1
     endif
   endif
 
+  " Check if the current file is a known source of an already open project
+  let l:candidate = s:get_main_from_open_projects()
+  if !empty(l:candidate)
+    return [l:candidate, 'source of open project', []]
+  endif
+
   " Fallbacks:
   " 1.  fallback candidate from get_main_latexmain
   " 2. a. tex: current file
@@ -288,7 +308,7 @@ endfunction
 
 " }}}1
 function! s:get_main_from_texroot() abort " {{{1
-  for l:line in getline(1, 5)
+  for l:line in getline(1, 20)
     let l:file_pattern = matchstr(l:line, g:vimtex#re#tex_input_root)
     if empty(l:file_pattern) | continue | endif
 
@@ -309,7 +329,7 @@ endfunction
 
 " }}}1
 function! s:get_main_from_subfile() abort " {{{1
-  for l:line in getline(1, 5)
+  for l:line in getline(1, 20)
     let l:filename = matchstr(l:line,
           \ '^\C\s*\\documentclass\[\zs.*\ze\]{subfiles}')
     if len(l:filename) > 0
@@ -329,6 +349,9 @@ function! s:get_main_from_subfile() abort " {{{1
         " difficult, since the main file is the one we are looking for. We
         " therefore assume that the main file lives somewhere upwards in the
         " directory tree.
+        "
+        " Note: The path is relative to the project root; see the note on
+        "       s:subfile_preserve_root in vimtex#state#init_local().
         let l:candidate = fnamemodify(findfile(l:filename, '.;'), ':p')
         if filereadable(l:candidate)
               \ && s:file_reaches_current(l:candidate)
@@ -338,13 +361,15 @@ function! s:get_main_from_subfile() abort " {{{1
 
         " Check the alternate buffer. This seems sensible e.g. in cases where one
         " enters an "outer" subfile through a 'gf' motion from the main file.
+        "
+        " Note: As above, the specified path did not resolve relative to the
+        "       current file, so we assume it is relative to the project root.
         let l:vimtex = getbufvar('#', 'vimtex', {})
-        for l:file in get(l:vimtex, 'sources', [])
-          if expand('%:p') ==# simplify(l:vimtex.root . '/' . l:file)
-            let s:subfile_preserve_root = 1
-            return l:vimtex.tex
-          endif
-        endfor
+        if !empty(get(l:vimtex, 'tex', ''))
+              \ && s:state_includes_file(l:vimtex, expand('%:p'))
+          let s:subfile_preserve_root = 1
+          return l:vimtex.tex
+        endif
       endif
     endif
   endfor
@@ -451,6 +476,30 @@ function! s:get_main_recurse_from_bib() abort " {{{1
 endfunction
 
 " }}}1
+function! s:get_main_from_open_projects() abort " {{{1
+  " Check if the current file is listed as a source of an already open project.
+  " This is the only way to detect a main file that lives in a subdirectory
+  " relative to the current file, since the directory scan only goes upwards.
+  "
+  " Note: This relies on the session state, i.e. on which projects happen to be
+  "       open. It is therefore only applied as a last resort, that is, after
+  "       the directory scan and before the fallbacks.
+  let l:current = expand('%:p')
+
+  let l:candidates = []
+  for l:state in values(s:vimtex_states)
+    let l:candidate = get(l:state, 'tex', '')
+    if l:candidate ==# l:current || empty(l:candidate) | continue | endif
+
+    if s:state_includes_file(l:state, l:current)
+      call add(l:candidates, l:candidate)
+    endif
+  endfor
+
+  return s:get_main_choose(l:candidates)
+endfunction
+
+" }}}1
 function! s:get_main_choose(list) abort " {{{1
   let l:list = vimtex#util#uniq_unsorted(a:list)
 
@@ -471,6 +520,8 @@ function! s:get_main_choose(list) abort " {{{1
     return l:existing[l:alternate_id]
   elseif len(l:existing) < 1 && len(l:new) == 1
     return l:new[0]
+  elseif g:vimtex_main_choose_first
+    return l:list[0]
   else
     let l:choices = {}
     for l:tex in l:list
@@ -480,7 +531,6 @@ function! s:get_main_choose(list) abort " {{{1
     unsilent return vimtex#ui#select(l:choices, {
           \ 'prompt': 'Please select an appropriate main file:',
           \ 'return': 'key',
-          \ 'force_choice': v:true,
           \})
   endif
 endfunction
@@ -521,7 +571,9 @@ function! s:file_reaches_current(file, ...) abort " {{{1
   call add(l:visited, a:file)
 
   for l:line in filter(readfile(a:file), 'v:val =~# g:vimtex#re#tex_input')
-    let l:file = vimtex#parser#tex#input_parser(l:line, a:file, '')
+    let l:file = get(
+          \ vimtex#parser#tex#input_parser(l:line, a:file, ''),
+          \ 'file', '')
     if empty(l:file) | continue | endif
 
     if !vimtex#paths#is_abs(l:file)
@@ -556,9 +608,22 @@ function! s:globpath_upwards(expr, path) abort " {{{1
 endfunction
 
 " }}}1
+function! s:state_includes_file(state, file) abort " {{{1
+  " Note: This assumes that a:state is a proper state with a non-empty "tex"
+  "       key and that a:file is an absolute path
+  for l:source in a:state.get_sources()
+    if a:file ==# simplify(a:state.root . '/' . l:source)
+      return v:true
+    endif
+  endfor
+
+  return v:false
+endfunction
+
+" }}}1
 
 function! s:check_standalone() abort " {{{1
-  return match(getline(1, 5),
+  return match(getline(1, 20),
         \      '\v^\C\s*\\documentclass%(\[.*\])?\{standalone\}') >= 0
 endfunction
 
